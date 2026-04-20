@@ -1,0 +1,7 @@
+data/chroma/
+data/chroma_test/
+data/*.pdf
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
