@@ -62,8 +62,24 @@ def parse_pdf(pdf_path: str) -> list[Section]:
     """
     Parse a PDF and return a list of Sections with detected structure.
     Each Section contains: name, page, text.
+
+    Args:
+        pdf_path: PDF 文件路徑
+
+    Returns:
+        章節列表
+
+    Raises:
+        ValueError: PDF 文件損壞、加密或格式不正確
     """
-    doc = fitz.open(pdf_path)
+    try:
+        doc = fitz.open(pdf_path)
+    except fitz.FileDataError:
+        raise ValueError("PDF 文件損壞或格式不正確")
+    except fitz.PasswordError:
+        raise ValueError("PDF 已加密，請先解密後再上傳")
+    except Exception as e:
+        raise ValueError(f"無法打開 PDF 文件：{str(e)}")
     body_size = _get_body_font_size(doc)
 
     sections: list[Section] = []
