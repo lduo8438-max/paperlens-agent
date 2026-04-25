@@ -49,6 +49,8 @@ paperlens-agent/
 - [x] Prompt 優化（結構化 prompt + 引用標註）
 - [x] 多文檔支持（文檔管理界面 + 選擇性查詢）
 - [x] 全面中文化（UI、錯誤信息、文檔）
+- [x] 測試驗證（配置管理、端到端功能）
+- [x] 文檔更新（README、progress）
 
 ## 技術棧
 - **前端**: Streamlit
