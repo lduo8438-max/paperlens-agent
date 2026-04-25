@@ -1,47 +1,70 @@
 """
-Structure-aware chunker.
+結構感知的分塊器，使用 LangChain 的 RecursiveCharacterTextSplitter。
 
-Splits each Section into chunks that respect sentence boundaries.
-Each chunk carries: chunk_id, text, section, page.
+將每個 Section 分割為 chunks，保留結構元數據。
 """
 
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from config import settings
 from models.schemas import Chunk, Section
-
-MAX_CHARS = 1000  # max characters per chunk
-
-
-def _split_text(text: str, max_chars: int) -> list[str]:
-    """Split text into parts of at most max_chars, breaking on sentence ends."""
-    if len(text) <= max_chars:
-        return [text]
-
-    parts = []
-    while len(text) > max_chars:
-        split_at = text.rfind(". ", 0, max_chars)
-        if split_at == -1:
-            split_at = max_chars
-        else:
-            split_at += 1  # include the period
-        parts.append(text[:split_at].strip())
-        text = text[split_at:].strip()
-
-    if text:
-        parts.append(text)
-    return parts
 
 
 def chunk_sections(sections: list[Section]) -> list[Chunk]:
-    """Convert sections into chunks with structural metadata."""
+    """
+    將論文章節轉換為文本塊，保留結構元數據。
+
+    使用 LangChain 的 RecursiveCharacterTextSplitter 進行智能分割，
+    支持中英文混合，並保留 chunk overlap。
+
+    Args:
+        sections: 論文章節列表
+
+    Returns:
+        包含結構元數據的文本塊列表
+    """
+    # 分隔符優先級：段落 > 句子 > 詞
+    separators = [
+        "\n\n",           # 段落
+        "\n",             # 換行
+        "。", "！", "？",  # 中文句子結束
+        ". ", "! ", "? ", # 英文句子結束
+        "；", "; ",       # 分號
+        "，", ", ",       # 逗號
+        " ",              # 空格
+        ""                # 字符
+    ]
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=settings.rag.chunk_size,
+        chunk_overlap=settings.rag.chunk_overlap,
+        length_function=len,
+        separators=separators
+    )
+
     chunks: list[Chunk] = []
     for sec_idx, section in enumerate(sections):
         if not section.text.strip():
             continue
-        parts = _split_text(section.text, MAX_CHARS)
-        for i, part in enumerate(parts):
+
+        # 使用智能分割
+        chunk_texts = splitter.split_text(section.text)
+
+        for i, text in enumerate(chunk_texts):
             chunks.append(Chunk(
                 chunk_id=f"{sec_idx}_{section.name}_{i}",
-                text=part,
+                text=text,
                 section=section.name,
-                page=section.page,
+                page=section.page
             ))
+
     return chunks
+
+
+# 保留舊的類接口以兼容現有代碼
+class Chunker:
+    """分塊器類（兼容接口）"""
+
+    def chunk(self, sections: list[Section]) -> list[Chunk]:
+        """將章節分塊"""
+        return chunk_sections(sections)
