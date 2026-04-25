@@ -28,6 +28,8 @@ class OpenAIConfig(BaseSettings):
 
     class Config:
         env_prefix = "OPENAI_"
+        # 環境變量優先級高於初始化參數
+        env_file_encoding = 'utf-8'
 
 
 class RAGConfig(BaseSettings):
@@ -89,20 +91,25 @@ class Settings(BaseSettings):
     @classmethod
     def load_from_yaml(cls, config_path: Optional[Path] = None) -> "Settings":
         """
-        從 YAML 文件加載配置
+        從 YAML 文件加載配置，支持環境變量覆蓋
 
         Args:
             config_path: 配置文件路徑，默認為 config/config.yaml
 
         Returns:
             Settings 實例
+
+        優先級（從高到低）：
+        1. 環境變量（OPENAI_MODEL, RAG_CHUNK_SIZE 等）
+        2. YAML 配置文件
+        3. 默認值
         """
         if config_path is None:
             # 默認配置文件路徑
             config_path = Path(__file__).parent / "config.yaml"
 
         if not config_path.exists():
-            # 如果配置文件不存在，返回默認配置
+            # 如果配置文件不存在，使用默認值（會自動讀取環境變量）
             return cls()
 
         # 讀取 YAML 文件
@@ -112,15 +119,61 @@ class Settings(BaseSettings):
         if config_data is None:
             return cls()
 
-        # 解析環境變量
+        # 解析 YAML 中的環境變量替換 ${VAR_NAME}
         config_data = cls._resolve_env_vars(config_data)
 
+        # 為每個配置組創建對象，讓 pydantic-settings 自動處理環境變量覆蓋
+        # 關鍵：使用 _env_settings 參數來設置 YAML 值作為默認值
+        # 然後 pydantic-settings 會自動檢查環境變量並覆蓋
+
+        # 創建配置對象時，先從環境變量讀取，如果沒有則使用 YAML 值
+        openai_data = config_data.get("openai", {})
+        rag_data = config_data.get("rag", {})
+        vector_store_data = config_data.get("vector_store", {})
+        embedding_data = config_data.get("embedding", {})
+        ui_data = config_data.get("ui", {})
+
+        # 使用臨時環境變量來傳遞 YAML 值，然後讓 pydantic-settings 處理優先級
+        # 但這樣會污染環境，所以我們需要另一種方法
+
+        # 正確的方法：手動檢查環境變量，如果存在則使用環境變量，否則使用 YAML 值
+        def get_config_value(env_prefix: str, key: str, yaml_value):
+            """獲取配置值，環境變量優先"""
+            env_key = f"{env_prefix}{key.upper()}"
+            env_value = os.environ.get(env_key)
+            if env_value is not None:
+                # 嘗試轉換類型
+                if isinstance(yaml_value, int):
+                    return int(env_value)
+                elif isinstance(yaml_value, float):
+                    return float(env_value)
+                elif isinstance(yaml_value, bool):
+                    return env_value.lower() in ('true', '1', 'yes')
+                return env_value
+            return yaml_value
+
+        # 為每個配置組應用環境變量覆蓋
+        for key in openai_data:
+            openai_data[key] = get_config_value("OPENAI_", key, openai_data[key])
+
+        for key in rag_data:
+            rag_data[key] = get_config_value("RAG_", key, rag_data[key])
+
+        for key in vector_store_data:
+            vector_store_data[key] = get_config_value("VECTOR_STORE_", key, vector_store_data[key])
+
+        for key in embedding_data:
+            embedding_data[key] = get_config_value("EMBEDDING_", key, embedding_data[key])
+
+        for key in ui_data:
+            ui_data[key] = get_config_value("UI_", key, ui_data[key])
+
         # 創建配置對象
-        openai_config = OpenAIConfig(**config_data.get("openai", {}))
-        rag_config = RAGConfig(**config_data.get("rag", {}))
-        vector_store_config = VectorStoreConfig(**config_data.get("vector_store", {}))
-        embedding_config = EmbeddingConfig(**config_data.get("embedding", {}))
-        ui_config = UIConfig(**config_data.get("ui", {}))
+        openai_config = OpenAIConfig(**openai_data)
+        rag_config = RAGConfig(**rag_data)
+        vector_store_config = VectorStoreConfig(**vector_store_data)
+        embedding_config = EmbeddingConfig(**embedding_data)
+        ui_config = UIConfig(**ui_data)
 
         return cls(
             openai=openai_config,
