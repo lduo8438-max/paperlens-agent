@@ -1,0 +1,30 @@
+# PaperLens-Agent 配置文件
+
+# OpenAI 配置
+openai:
+  api_key: ${OPENAI_API_KEY}  # 從環境變量讀取
+  model: gpt-4o-mini
+  temperature: 0.7
+  max_tokens: 1000
+
+# RAG 配置
+rag:
+  chunk_size: 1000           # 每個 chunk 的最大字符數
+  chunk_overlap: 200         # chunk 之間的重疊字符數
+  top_k: 5                   # 檢索返回的 chunk 數量
+  similarity_threshold: 0.7  # 相似度閾值（未來使用）
+
+# 向量存儲配置
+vector_store:
+  path: ./data/chroma
+  collection_name: paperlens
+
+# Embedding 配置
+embedding:
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  device: cpu
+
+# UI 配置
+ui:
+  page_title: PaperLens - 學術論文分析器
+  max_upload_size: 50  # MB
